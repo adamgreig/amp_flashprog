@@ -8,9 +8,9 @@ cortex-m = "0.5.8"
 cortex-m-rt = "0.6.5"
 panic-halt = "0.2.0"
 stm32f103xx = "0.10.0"
-usb-device = { git = "https://github.com/mvirkkunen/usb-device", rev = "60db7e175e6dcea0b9c0f6b56564d1253bf0fd90" }
-stm32f103xx-hal = { git = "https://github.com/mvirkkunen/stm32f103xx-hal", rev = "71b5d90972abfcf66cd2fe4a9d4e28df2564abfb" }
-stm32f103xx-usb = { git = "https://github.com/mvirkkunen/stm32f103xx-usb", rev = "6555f41de0ef93c4bb2dc04551c317022203ffec" }
+usb-device = { git = "https://github.com/mvirkkunen/usb-device", rev = "6b606d394bdebf33de8866a4a21c3aa41e32c010" }
+stm32f103xx-hal = { git = "https://github.com/mvirkkunen/stm32f103xx-hal", rev = "0dd491d6238a338d6023dd0328f38c746d81745c" }
+stm32f103xx-usb = { git = "https://github.com/mvirkkunen/stm32f103xx-usb", rev = "548729ae7dd6d09f21e57b36651601b80bc87bfb" }
 
 [profile.release]
 codegen-units = 1

@@ -4,9 +4,12 @@
 // https://github.com/mvirkkunen/stm32f103xx-usb/blob/master/examples/serial.rs
 // where it is Copyright (c) 2018 Matti Virkkunen and released under the MIT license.
 //
+
+/// Minimal CDC-ACM implementation for the examples - this will eventually be a real crate!
+
+use core::cell::RefCell;
 use core::cmp::min;
 use usb_device::class_prelude::*;
-use usb_device::utils::AtomicMutex;
 use usb_device::Result;
 
 pub const USB_CLASS_CDC: u8 = 0x02;
@@ -35,7 +38,7 @@ pub struct SerialPort<'a, B: 'a + UsbBus + Sync> {
     read_ep: EndpointOut<'a, B>,
     write_ep: EndpointIn<'a, B>,
 
-    read_buf: AtomicMutex<Buf>,
+    read_buf: RefCell<Buf>,
 }
 
 impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
@@ -46,7 +49,7 @@ impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
             data_if: bus.interface(),
             read_ep: bus.bulk(64),
             write_ep: bus.bulk(64),
-            read_buf: AtomicMutex::new(Buf {
+            read_buf: RefCell::new(Buf {
                 buf: [0; 64],
                 len: 0,
             }),
@@ -62,12 +65,7 @@ impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
     }
 
     pub fn read(&self, data: &mut [u8]) -> Result<usize> {
-        let mut guard = self.read_buf.try_lock();
-
-        let buf = match guard {
-            Some(ref mut buf) => buf,
-            None => { return Ok(0) },
-        };
+        let mut buf = self.read_buf.borrow_mut();
 
         // Terrible buffering implementation for brevity's sake
 
