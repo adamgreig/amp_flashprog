@@ -45,7 +45,7 @@ fn main() -> ! {
     // Grab SPI pins
     let mut mosi = gpioa.pa4.into_floating_input(&mut gpioa.crl);
     let miso = gpioa.pa2.into_floating_input(&mut gpioa.crl);
-    let mut sclk = gpioa.pa5.into_floating_input(&mut gpioa.crl);
+    let mut sclk = gpioa.pa5.into_pull_up_input(&mut gpioa.crl);
     let mut gpio = gpioa.pa3.into_push_pull_output(&mut gpioa.crl);
     let mut cs = gpioa.pa6.into_open_drain_output(&mut gpioa.crl);
 
@@ -61,94 +61,106 @@ fn main() -> ! {
         .device_class(cdc_acm::USB_CLASS_CDC)
         .build(&[&serial]);
 
-    let mut last_nibble = None;
+    // USB transmit and receive buffers
+    let mut usb_rxbuf = [0u8; 64];
+    let mut usb_txbuf = [0u8; 64];
+    let mut usb_txidx = 0usize;
 
     loop {
         usb_dev.poll();
 
-        if usb_dev.state() == UsbDeviceState::Configured {
 
-            let mut rxbuf = [0u8; 64];
-            let mut txbuf = [0u8; 64];
-            let mut txidx = 0usize;
+        // If we're not currently connected to a computer, just keep polling
+        if usb_dev.state() != UsbDeviceState::Configured {
+            continue;
+        }
 
-            match serial.read(&mut rxbuf) {
-                Ok(count) if count > 0 => {
+        // See if there's any data to read
+        match serial.read(&mut usb_rxbuf) {
+            Ok(count) if count > 0 => {
+                // Iterate each incoming byte
+                for c in usb_rxbuf[0..count].iter_mut() {
+                    match c {
+                        // 'g': set GPIO low
+                        0x67 => {
+                            gpio.set_low();
+                        },
 
-                    for c in rxbuf[0..count].iter_mut() {
-                        match c {
-                            // 'g'
-                            0x67 => {
-                                gpio.set_low();
-                            },
-
-                            // 'G'
-                            0x47 => {
-                                gpio.set_high();
-                            }
-
-                            // 's'
-                            0x73 => {
-                                cs.set_low();
-                            }
-
-                            // 'S'
-                            0x53 => {
-                                cs.set_high();
-                            }
-
-                            // \n
-                            0x0A => {
-                                last_nibble = None;
-                            }
-
-                            0x30...0x39 | 0x41...0x46 | 0x61...0x66 => {
-                                let nibble = match c {
-                                    0x30...0x39 => *c - 0x30,
-                                    0x41...0x46 => *c - 0x41 + 10,
-                                    0x61...0x66 => *c - 0x61 + 10,
-                                    _ => unreachable!(),
-                                };
-                                match last_nibble {
-                                    None => last_nibble = Some(nibble),
-                                    Some(n) => {
-                                        let tx = n << 4 | nibble;
-                                        last_nibble = None;
-                                        let mut rx = 0u8;
-                                        let mut mosi_out = mosi.into_push_pull_output(&mut gpioa.crl);
-                                        let mut sclk_out = sclk.into_push_pull_output(&mut gpioa.crl);
-                                        for clk in 0..8 {
-                                            let txbit = (tx >> (7 - clk)) & 1;
-                                            sclk_out.set_low();
-                                            if txbit == 1 {
-                                                mosi_out.set_high();
-                                            } else {
-                                                mosi_out.set_low();
-                                            }
-                                            delay_clk();
-                                            if miso.is_high() {
-                                                rx |= 1 << (7 - clk);
-                                            }
-                                            sclk_out.set_high();
-                                            delay_clk();
-                                        }
-                                        txbuf[txidx] = rx;
-                                        txidx += 1;
-                                        mosi = mosi_out.into_floating_input(&mut gpioa.crl);
-                                        sclk = sclk_out.into_floating_input(&mut gpioa.crl);
-                                    }
-                                }
-                            }
-
-                            _ => {},
+                        // 'G': set GPIO high
+                        0x47 => {
+                            gpio.set_high();
                         }
+
+                        // 's': set CS low
+                        0x73 => {
+                            cs.set_low();
+                        }
+
+                        // 'S': set CS hi-z
+                        0x53 => {
+                            cs.set_high();
+                        }
+
+                        // Hex nibble: transmit
+                        0x30...0x39 | 0x41...0x46 | 0x61...0x66 => {
+                            // Decode hex nibble
+                            let tx = match c {
+                                0x30...0x39 => *c - 0x30,
+                                0x41...0x46 => *c - 0x41 + 10,
+                                0x61...0x66 => *c - 0x61 + 10,
+                                _ => unreachable!(),
+                            };
+                            let mut rx = 0u8;
+
+                            // Set MOSI and SCLK to outputs
+                            let mut mosi_out = mosi.into_push_pull_output(&mut gpioa.crl);
+                            let mut sclk_out = sclk.into_push_pull_output(&mut gpioa.crl);
+                            sclk_out.set_high();
+
+                            // Process each bit
+                            for clk in (0..4).rev() {
+                                if tx >> clk & 1 == 1 {
+                                    mosi_out.set_high();
+                                } else {
+                                    mosi_out.set_low();
+                                }
+                                sclk_out.set_low();
+                                delay_clk();
+
+                                if miso.is_high() {
+                                    rx |= 1 << clk;
+                                }
+                                sclk_out.set_high();
+                                delay_clk();
+                            }
+
+                            // Set MOSI and SCLK back to inputs
+                            mosi = mosi_out.into_floating_input(&mut gpioa.crl);
+                            sclk = sclk_out.into_pull_up_input(&mut gpioa.crl);
+
+                            // Encode received data to hex and enqueue for transmission
+                            usb_txbuf[usb_txidx] = match rx {
+                                0...9   => rx + 0x30,
+                                10...15 => rx + 0x61,
+                                _ => unreachable!(),
+                            };
+                            usb_txidx += 1;
+                        }
+
+                        // Ignore any other received byte
+                        _ => {},
                     }
-                    if txidx > 0 {
-                        serial.write(&txbuf[0..txidx]).ok();
-                    }
-                },
-                _ => { },
-            }
+                }
+
+                // Transmit any queued data over USB
+                if usb_txidx > 0 {
+                    serial.write(&usb_txbuf[0..usb_txidx]).ok();
+                    usb_txidx = 0;
+                }
+            },
+
+            // No action if there's no received data
+            _ => { },
         }
     }
 }
