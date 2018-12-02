@@ -9,6 +9,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rt 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embedded-hal 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-halt 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "stm32f103xx 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "stm32f103xx-hal 0.1.0 (git+https://github.com/mvirkkunen/stm32f103xx-hal?rev=0dd491d6238a338d6023dd0328f38c746d81745c)",

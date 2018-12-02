@@ -12,6 +12,10 @@ usb-device = { git = "https://github.com/mvirkkunen/usb-device", rev = "6b606d39
 stm32f103xx-hal = { git = "https://github.com/mvirkkunen/stm32f103xx-hal", rev = "0dd491d6238a338d6023dd0328f38c746d81745c" }
 stm32f103xx-usb = { git = "https://github.com/mvirkkunen/stm32f103xx-usb", rev = "548729ae7dd6d09f21e57b36651601b80bc87bfb" }
 
+[dependencies.embedded-hal]
+features = ["unproven"]
+version = "0.2.1"
+
 [profile.release]
 codegen-units = 1
 incremental = false

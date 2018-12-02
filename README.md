@@ -22,16 +22,18 @@ FPGA in reset while writing to its flash memory.
 
 ## Protocol
 
-The serial port transmits and receives  ASCII-coded data.
+The serial port transmits and receives ASCII-coded data.
 
-| Transmit | Effect |
-|----------|--------|
-| 0x67 `g` | Sets GPIO low |
-| 0x47 `G` | Sets GPIO high |
-| 0x73 `s` | Sets CS low |
-| 0x53 `S` | Sets CS high-impedance (typically then pulled high) |
-| 0-9, a-f, A-F | Data nibbles |
-| Anything else | No effect |
+| Transmit      | Effect                                                     |
+|---------------|------------------------------------------------------------|
+| 0x67 `g`      | Sets GPIO low
+| 0x47 `G`      | Sets GPIO high
+| 0x73 `s`      | Sets CS low
+| 0x53 `S`      | Sets CS high-impedance (typically then pulled high)
+| 0x6d `m`      | Sets default flash-programming mode (MOSI out, MISO in)
+| 0x4d `M`      | Sets FPGA-programming mode (MOSI in, MISO out)
+| 0-9, a-f, A-F | Data nibbles to transmit
+| Anything else | No effect
 
 Each nibble is transmitted upon reception and the four data bits received on
 the SPI bus are then sent back as a hex character over the serial port.
