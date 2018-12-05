@@ -225,7 +225,8 @@ class FPGA:
         self.programmer.write(b"\x00\x00")
         self.programmer.select()
         # Send configuration image
-        self.programmer.write(data)
+        for idx in trange(0, len(data), 4):
+            self.programmer.write(data[idx:idx+4])
         # Release CS and wait for configuration to be complete
         self.programmer.unselect()
         self.programmer.write(b"\x00" * 40)
