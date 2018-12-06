@@ -64,7 +64,7 @@ class Flash:
     def __init__(self, programmer):
         self.programmer = programmer
 
-    def program(self, data, lma):
+    def read_id(self):
         self.programmer.flash_mode()
         # Hold FPGA in reset until we're done
         self.programmer.reset()
@@ -74,6 +74,9 @@ class Flash:
         unique_id = self.read_unique_id()
         print(f"Flash: Manufacturer {manufacturer:02X}, device {device:02X}")
         print(f"       Unique ID: {unique_id}")
+
+    def program(self, data, lma):
+        self.read_id()
 
         # Erase enough space for the data to program
         print("Erasing flash...")
@@ -225,7 +228,7 @@ class FPGA:
         self.programmer.write(b"\x00\x00")
         self.programmer.select()
         # Send configuration image
-        for idx in trange(0, len(data), 4):
+        for idx in trange(0, len(data), 4, unit='B', unit_scale=4):
             self.programmer.write(data[idx:idx+4])
         # Release CS and wait for configuration to be complete
         self.programmer.unselect()
@@ -248,6 +251,10 @@ def get_args():
         help="Program FPGA directly (skip flash)",
         action='store_true')
     parser.add_argument(
+        "--read-flash-id",
+        help="Just read flash ID",
+        action='store_true')
+    parser.add_argument(
         "bin",
         help="binfile to program")
     return parser.parse_args()
@@ -259,7 +266,10 @@ def main():
         data = f.read()
     lma = int(args.lma, 0)
     prog = Programmer(args.port)
-    if args.fpga:
+    if args.read_flash_id:
+        flash = Flash(prog)
+        flash.read_id()
+    elif args.fpga:
         fpga = FPGA(prog)
         fpga.program(data)
     else:
