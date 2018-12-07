@@ -7,6 +7,8 @@
 
 /// Minimal CDC-ACM implementation for the examples - this will eventually be a real crate!
 
+use core::cell::Cell;
+
 use usb_device::class_prelude::*;
 use usb_device::Result;
 
@@ -30,6 +32,7 @@ pub struct SerialPort<'a, B: 'a + UsbBus + Sync> {
     data_if: InterfaceNumber,
     read_ep: EndpointOut<'a, B>,
     write_ep: EndpointIn<'a, B>,
+    need_zip: Cell<bool>,
 }
 
 impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
@@ -40,10 +43,19 @@ impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
             data_if: bus.interface(),
             read_ep: bus.bulk(64),
             write_ep: bus.bulk(64),
+            need_zip: Cell::new(false),
         }
     }
 
     pub fn write(&self, data: &[u8]) -> Result<usize> {
+        if self.need_zip.get() {
+            return Ok(0);
+        }
+
+        if data.len() == 64 {
+            self.need_zip.set(true);
+        }
+
         match self.write_ep.write(data) {
             Ok(count) => Ok(count),
             Err(UsbError::Busy) => Ok(0),
@@ -99,6 +111,13 @@ impl<'a, B: UsbBus + Sync> UsbClass for SerialPort<'a, B> {
         writer.endpoint(&self.read_ep)?;
 
         Ok(())
+    }
+
+    fn endpoint_in_complete(&self, addr: EndpointAddress) {
+        if self.need_zip.get() && addr == self.write_ep.address() {
+            self.need_zip.set(false);
+            self.write_ep.write(&[]).ok();
+        }
     }
 
     fn control_out(&self, req: &control::Request, buf: &[u8]) -> ControlOutResult {
