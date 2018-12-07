@@ -32,6 +32,8 @@ The serial port transmits and receives ASCII-coded data.
 | 0x53 `S`      | Sets CS high-impedance (typically then pulled high)
 | 0x6d `m`      | Sets default flash-programming mode (MOSI out, MISO in)
 | 0x4d `M`      | Sets FPGA-programming mode (MOSI in, MISO out)
+| 0x70 `p`      | Disables target power (default)
+| 0x40 `P`      | Enables target power
 | 0-9, a-f, A-F | Data nibbles to transmit
 | Anything else | No effect
 

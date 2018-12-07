@@ -63,6 +63,7 @@ fn main() -> ! {
     assert!(clocks.usbclk_valid());
 
     let mut gpioa = dp.GPIOA.split(&mut rcc.apb2);
+    let mut gpiob = dp.GPIOB.split(&mut rcc.apb2);
 
     // Grab SPI pins
     let mut mosi = gpioa.pa4.into_floating_input(&mut gpioa.crl);
@@ -70,6 +71,10 @@ fn main() -> ! {
     let mut sclk = gpioa.pa5.into_pull_up_input(&mut gpioa.crl);
     let mut gpio = gpioa.pa3.into_push_pull_output(&mut gpioa.crl);
     let mut cs   = gpioa.pa6.into_open_drain_output(&mut gpioa.crl);
+
+    // Set TPWR to an output and high to disable target power
+    let mut tpwr = gpiob.pb1.into_push_pull_output(&mut gpiob.crl);
+    tpwr.set_high();
 
     // Set USB pullup on this hardware to begin USB enumeration
     let mut pa8 = gpioa.pa8.into_push_pull_output(&mut gpioa.crh);
@@ -87,8 +92,8 @@ fn main() -> ! {
         .build(&[&serial]);
 
     // USB transmit and receive buffers
-    let mut usb_rxbuf = [0u8; 1024];
-    let mut usb_txbuf = [0u8; 1024];
+    let mut usb_rxbuf = [0u8; 64];
+    let mut usb_txbuf = [0u8; 64];
     let mut usb_txidx = 0usize;
 
     let mut mode = Mode::Flash;
@@ -106,6 +111,7 @@ fn main() -> ! {
             Ok(count) if count > 0 => {
                 // Iterate each incoming byte
                 for c in usb_rxbuf[0..count].iter() {
+
                     match c {
                         // 'g': set GPIO low
                         0x67 => {
@@ -135,6 +141,16 @@ fn main() -> ! {
                         // 'M': set mode to FPGA
                         0x4d => {
                             mode = Mode::FPGA;
+                        }
+
+                        // 'p': set power off
+                        0x70 => {
+                            tpwr.set_high();
+                        }
+
+                        // 'P': set power on
+                        0x40 => {
+                            tpwr.set_low();
                         }
 
                         // Hex nibble: transmit

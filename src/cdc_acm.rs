@@ -7,8 +7,6 @@
 
 /// Minimal CDC-ACM implementation for the examples - this will eventually be a real crate!
 
-use core::cell::RefCell;
-use core::cmp::min;
 use usb_device::class_prelude::*;
 use usb_device::Result;
 
@@ -26,19 +24,12 @@ const CDC_TYPE_UNION: u8 = 0x06;
 const REQ_SET_LINE_CODING: u8 = 0x20;
 const REQ_SET_CONTROL_LINE_STATE: u8 = 0x22;
 
-struct Buf {
-    buf: [u8; 64],
-    len: usize,
-}
-
 pub struct SerialPort<'a, B: 'a + UsbBus + Sync> {
     comm_if: InterfaceNumber,
     comm_ep: EndpointIn<'a, B>,
     data_if: InterfaceNumber,
     read_ep: EndpointOut<'a, B>,
     write_ep: EndpointIn<'a, B>,
-
-    read_buf: RefCell<Buf>,
 }
 
 impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
@@ -49,10 +40,6 @@ impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
             data_if: bus.interface(),
             read_ep: bus.bulk(64),
             write_ep: bus.bulk(64),
-            read_buf: RefCell::new(Buf {
-                buf: [0; 64],
-                len: 0,
-            }),
         }
     }
 
@@ -65,30 +52,11 @@ impl<'a, B: UsbBus + Sync> SerialPort<'a, B> {
     }
 
     pub fn read(&self, data: &mut [u8]) -> Result<usize> {
-        let mut buf = self.read_buf.borrow_mut();
-
-        // Terrible buffering implementation for brevity's sake
-
-        if buf.len == 0 {
-            buf.len = match self.read_ep.read(&mut buf.buf) {
-                Ok(count) => count,
-                Err(UsbError::NoData) => return Ok(0),
-                e => return e,
-            };
+        match self.read_ep.read(data) {
+            Ok(count) => Ok(count),
+            Err(UsbError::NoData) => Ok(0),
+            e => e,
         }
-
-        if buf.len == 0 {
-            return Ok(0);
-        }
-
-        let count = min(data.len(), buf.len);
-
-        &data[..count].copy_from_slice(&buf.buf[0..count]);
-
-        buf.buf.rotate_left(count);
-        buf.len -= count;
-
-        Ok(count)
     }
 }
 

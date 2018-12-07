@@ -9,8 +9,8 @@ cortex-m-rt = "0.6.5"
 panic-halt = "0.2.0"
 stm32f103xx = "0.10.0"
 usb-device = { git = "https://github.com/mvirkkunen/usb-device", rev = "6b606d394bdebf33de8866a4a21c3aa41e32c010" }
-stm32f103xx-hal = { git = "https://github.com/mvirkkunen/stm32f103xx-hal", rev = "0dd491d6238a338d6023dd0328f38c746d81745c" }
-stm32f103xx-usb = { git = "https://github.com/mvirkkunen/stm32f103xx-usb", rev = "548729ae7dd6d09f21e57b36651601b80bc87bfb" }
+stm32f103xx-hal = { git = "https://github.com/japaric/stm32f103xx-hal", rev = "d1bfbbf9148fc3b9d095fdb3f299aca4070531d8" }
+stm32f103xx-usb = { git = "https://github.com/mvirkkunen/stm32f103xx-usb", rev = "08e1a83f15d4a77c28ebf22cc21437af67437d24" }
 
 [dependencies.embedded-hal]
 features = ["unproven"]

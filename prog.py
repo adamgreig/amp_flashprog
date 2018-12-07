@@ -39,25 +39,29 @@ class Programmer:
         self.serial.write(b"m")
         self.serial.flush()
 
-    def write(self, data):
+    def power_on(self):
+        self.serial.write(b"P")
+        self.serial.flush()
+
+    def power_off(self):
+        self.serial.write(b"p")
+        self.serial.flush()
+
+    def write(self, data, progress=False):
         # Flush cache
         self.serial.read(1024)
-        # Store received data
-        rx = b""
-        # Send hex-coded data in four-byte chunks
+        # Send hex-coded data
         tx = binascii.b2a_hex(data)
-        for idx in range(0, len(tx), 8):
-            # Transmit four bytes (8 hex nibbles)
-            txdata = tx[idx:idx+8]
-            self.serial.write(txdata)
-            self.serial.flush()
-            time.sleep(0.001)
-            # Read response
-            rxdata = self.serial.read(len(txdata))
-            rx += rxdata
-        if len(rx) != len(tx):
-            print("Warning: Did not receive as many bytes as transmitted")
-        return binascii.a2b_hex(rx)
+        txdata = tx
+        self.serial.write(txdata)
+        self.serial.flush()
+        time.sleep(0.01)
+        # Read response
+        rxdata = self.serial.read(2*len(txdata))
+        if len(rxdata) != len(txdata):
+            print("Warning: Did not receive as many bytes as transmitted"
+                  f" (rx {len(rxdata)}, tx {len(txdata)})")
+        return binascii.a2b_hex(rxdata)
 
 
 class Flash:
@@ -65,7 +69,6 @@ class Flash:
         self.programmer = programmer
 
     def read_id(self):
-        self.programmer.flash_mode()
         # Hold FPGA in reset until we're done
         self.programmer.reset()
         # Wake up flash and check we can read its ID
@@ -92,11 +95,15 @@ class Flash:
 
         if programmed == data:
             print("Readback successful.")
+            self.programmer.unreset()
         else:
             print("Error: Readback unsuccessful.")
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 f.write(programmed)
                 print(f"Readback data stored in {f.name}")
+
+    def read(self, lma, length):
+        return self.fast_read(lma, length)
 
     def erase_for_data(self, lma, length):
         # Adjust LMA to be 64K-block aligned
@@ -228,8 +235,7 @@ class FPGA:
         self.programmer.write(b"\x00\x00")
         self.programmer.select()
         # Send configuration image
-        for idx in trange(0, len(data), 4, unit='B', unit_scale=4):
-            self.programmer.write(data[idx:idx+4])
+        self.programmer.write(data, progress=True)
         # Release CS and wait for configuration to be complete
         self.programmer.unselect()
         self.programmer.write(b"\x00" * 40)
@@ -244,37 +250,60 @@ def get_args():
         default="/dev/serial/by-id/usb-AGG_AMP_FlashProg_0000-if00")
     parser.add_argument(
         "--lma",
-        help="Load memory address (flash only)",
+        help="Load memory address (--flash and --read-flash, default 0)",
         default="0")
     parser.add_argument(
+        "--flash-read-length",
+        help="Flash read length (--read-flash only)",
+        default=1024)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "--fpga",
-        help="Program FPGA directly (skip flash)",
-        action='store_true')
-    parser.add_argument(
+        help="Bitstream file to program directly to FPGA")
+    group.add_argument(
+        "--flash",
+        help="Bitstream file to save to flash")
+    group.add_argument(
         "--read-flash-id",
         help="Just read flash ID",
         action='store_true')
-    parser.add_argument(
-        "bin",
-        help="binfile to program")
+    group.add_argument(
+        "--read-flash",
+        help="Read flash contents to file")
+    group.add_argument(
+        "--power",
+        help="Control target power",
+        choices=("on", "off"))
     return parser.parse_args()
 
 
 def main():
     args = get_args()
-    with open(args.bin, "rb") as f:
-        data = f.read()
     lma = int(args.lma, 0)
     prog = Programmer(args.port)
-    if args.read_flash_id:
-        flash = Flash(prog)
-        flash.read_id()
-    elif args.fpga:
+    if args.fpga:
+        with open(args.fpga, "rb") as f:
+            data = f.read()
         fpga = FPGA(prog)
         fpga.program(data)
-    else:
+    elif args.flash:
+        with open(args.flash, "rb") as f:
+            data = f.read()
         flash = Flash(prog)
         flash.program(data, lma)
+    elif args.read_flash_id:
+        flash = Flash(prog)
+        flash.read_id()
+    elif args.read_flash:
+        flash = Flash(prog)
+        data = flash.read(lma, args.flash_read_length)
+        with open(args.read_flash, "wb") as f:
+            f.write(data)
+    elif args.power:
+        if args.power == "on":
+            prog.power_on()
+        elif args.power == "off":
+            prog.power_off()
 
 
 if __name__ == "__main__":
