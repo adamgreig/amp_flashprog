@@ -53,15 +53,21 @@ class Programmer:
         # Send hex-coded data
         tx = binascii.b2a_hex(data)
         txdata = tx
-        self.serial.write(txdata)
-        self.serial.flush()
-        time.sleep(0.01)
+        rx = b""
+        if progress:
+            prange = trange
+        else:
+            prange = range
+        for chunk in prange(0, len(tx), 256):
+            txdata = tx[chunk:chunk+256]
+            self.serial.write(txdata)
+            self.serial.flush()
+            rx += self.serial.read(1024)
         # Read response
-        rxdata = self.serial.read(2*len(txdata))
-        if len(rxdata) != len(txdata):
+        if len(rx) != len(tx):
             print("Warning: Did not receive as many bytes as transmitted"
-                  f" (rx {len(rxdata)}, tx {len(txdata)})")
-        return binascii.a2b_hex(rxdata)
+                  f" (rx {len(rx)}, tx {len(txdata)})")
+        return binascii.a2b_hex(rx)
 
 
 class Flash:
